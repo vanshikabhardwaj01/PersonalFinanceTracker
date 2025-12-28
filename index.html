@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personal Finance Tracker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/apexcharts/3.35.0/apexcharts.min.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <style>
+    /* Aurora Mesh Background */
+    body {
+      margin: 0; padding: 20px;
+      font-family: 'Poppins', sans-serif; color: #fff;
+      background: radial-gradient(circle at 50% 50%, #1e3a8a, #111827, #000);
+      background-attachment: fixed; min-height: 100vh;
+    }
+    .glass {
+      background: rgba(255, 255, 255, 0.07);
+      backdrop-filter: blur(12px);
+      border-radius: 15px; padding: 20px; margin-bottom: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .alert-top {
+      background: rgba(255, 71, 71, 0.2);
+      border-left: 5px solid #ff4747; padding: 15px;
+      border-radius: 10px; margin-bottom: 25px;
+    }
+    .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .card { text-align: center; }
+    .goal-card { background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; }
+    .p-bar { background: rgba(255,255,255,0.1); height: 10px; border-radius: 5px; margin: 10px 0; }
+    .p-fill { background: #00f2fe; height: 100%; border-radius: 5px; box-shadow: 0 0 10px #00f2fe; }
+    .chart-box { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+    .full-width-chart { grid-column: span 2; }
+    #loader { text-align: center; padding: 100px; font-size: 24px; }
+    h3 { margin-top: 0; font-weight: 500; font-size: 18px; }
+  </style>
+</head>
+<body>
+
+  <div id="loader"><i class="fas fa-circle-notch fa-spin"></i> Loading Financial Data...</div>
+
+  <div id="main-content" style="display:none;">
+    <div class="glass">
+      <h2 style="margin:0;"><i class="fas fa-wallet"></i> Personal Finance Tracker</h2>
+    </div>
+
+    <div class="alert-top">
+      <small><i class="fas fa-bell"></i> SPENDING ALERT</small>
+      <div id="alertMsg" style="font-size: 15px; margin-top:5px; font-weight: 500;"></div>
+    </div>
+
+    <div class="metric-grid">
+      <div class="glass card">
+        <h4 style="color:#00f2fe; margin:0;">Income</h4>
+        <h2 id="incVal" style="font-size:32px;">₹0</h2>
+        <small id="incStat"></small>
+      </div>
+      <div class="glass card">
+        <h4 style="color:#ff4747; margin:0;">Expenses</h4>
+        <h2 id="expVal" style="font-size:32px;">₹0</h2>
+        <small id="expStat"></small>
+      </div>
+      <div class="glass card">
+        <h4 style="color:#00ff87; margin:0;">Total Savings</h4>
+        <h2 id="savVal" style="font-size:32px;">₹0</h2>
+        <small>Available Funds</small>
+      </div>
+    </div>
+
+    <div class="glass">
+      <h3><i class="fas fa-bullseye"></i> Goal Progress</h3>
+      <div class="metric-grid" id="goalContainer"></div>
+    </div>
+
+    <div class="chart-box">
+      <div class="glass"><h3>Expense Breakdown</h3><div id="pieChart"></div></div>
+      <div class="glass"><h3>Monthly Check</h3><div id="barChart"></div></div>
+      <div class="glass full-width-chart"><h3>My Savings Path</h3><div id="trendChart"></div></div>
+    </div>
+  </div>
+
+  <script>
+    // ************************************************************
+    // 1. APNA GOOGLE APPS SCRIPT WEB APP URL YAHAN DALEIN
+    // ************************************************************
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxyWrg7iD9ZpnwsLe3PsDDxJXO-6gBuyJ6BxyrZdA6DuBnlbRsgYlz3SOYCNYUoGiVhlw/exec";
+
+    const format = v => '₹' + Math.round(v).toLocaleString('en-IN');
+
+    async function fetchData() {
+      try {
+        const response = await fetch(SCRIPT_URL);
+        const d = await response.json();
+
+        // Show dashboard, hide loader
+        document.getElementById('loader').style.display = 'none';
+        document.getElementById('main-content').style.display = 'block';
+
+        // Update Text Data
+        document.getElementById('incVal').innerText = format(d.cur.inc);
+        document.getElementById('expVal').innerText = format(d.cur.exp);
+        document.getElementById('savVal').innerText = format(d.cur.inc - d.cur.exp);
+
+        // Alert Box Update
+        document.getElementById('alertMsg').innerHTML = `Alert: High spending in <b>${d.topExpName}</b> (${format(d.topExpVal)}). Consider reviewing these costs.`;
+
+        // Monthly Stats
+        let incP = (((d.cur.inc - d.pre.inc)/d.pre.inc)*100).toFixed(1);
+        let expP = (((d.cur.exp - d.pre.exp)/d.pre.exp)*100).toFixed(1);
+        document.getElementById('incStat').innerText = `${incP}% vs last month`;
+        document.getElementById('expStat').innerText = `${expP}% vs last month`;
+
+        // Goals Rendering
+        let gH = '';
+        d.goals.forEach(g => {
+          let p = Math.min(((d.cur.inc-d.cur.exp)/g.t)*100, 100).toFixed(0);
+          gH += `<div class="goal-card">
+            <b>${g.n}</b><div class="p-bar"><div class="p-fill" style="width:${p}%"></div></div>
+            <small>${p}% achieved of ${format(g.t)}</small>
+          </div>`;
+        });
+        document.getElementById('goalContainer').innerHTML = gH;
+
+        // Render Charts
+        renderCharts(d);
+
+      } catch (error) {
+        console.error("Fetch Error:", error);
+        document.getElementById('loader').innerHTML = "Error loading data. Make sure Script URL is public.";
+      }
+    }
+
+    function renderCharts(d) {
+      // Pie Chart
+      new ApexCharts(document.querySelector("#pieChart"), {
+        chart: { type: 'donut', height: 350 }, theme: { mode: 'dark' },
+        series: d.pieValues, labels: d.pieLabels, colors: ['#00f2fe', '#ff4747', '#f59e0b', '#00ff87'],
+        legend: { position: 'bottom' }
+      }).render();
+
+      // Bar Chart
+      new ApexCharts(document.querySelector("#barChart"), {
+        chart: { type: 'bar', height: 350 }, theme: { mode: 'dark' },
+        series: [{ name: 'Expenses', data: d.expArray }],
+        xaxis: { categories: d.mList }, colors: ['#ff4747']
+      }).render();
+
+      // Area Trend Chart
+      new ApexCharts(document.querySelector("#trendChart"), {
+        chart: { type: 'area', height: 400 }, theme: { mode: 'dark' },
+        series: [{name:'Income', data:d.incArray}, {name:'Expense', data:d.expArray}],
+        xaxis: { categories: d.mList }, colors: ['#00ff87', '#ff4747'],
+        stroke: { curve: 'smooth' }
+      }).render();
+    }
+
+    window.onload = fetchData;
+  </script>
+</body>
+</html>
